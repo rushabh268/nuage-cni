@@ -119,6 +119,30 @@ else
 iptables -w -I FORWARD 1 -d ${NUAGE_CLUSTER_NW_CIDR:-} -j ACCEPT -m comment --comment "nuage-underlay-overlay"  
 fi
 
+if [ "$1" = "nuage-cni-k8s" ]; then
+# Create Nuage kubeconfig file for api server communication
+cat > /etc/kubernetes/pki/nuage.kubeconfig <<EOF
+apiVersion: v1
+kind: Config
+current-context: nuage-to-cluster.local
+preferences: {}
+clusters:
+- cluster:
+    insecure-skip-tls-verify: true
+    server: ${MASTER_API_SERVER_URL:-}
+  name: cluster.local
+contexts:
+- context:
+    cluster: cluster.local
+    user: nuage
+  name: nuage-to-cluster.local
+users:
+- name: nuage
+  user:
+    token: ${NUAGE_TOKEN:-}
+EOF
+fi
+
 # Start Nuage CNI audit daemon to run infinitely here.
 # This prevents Kubernetes from restarting the pod repeatedly.
 /opt/cni/bin/$1 -daemon

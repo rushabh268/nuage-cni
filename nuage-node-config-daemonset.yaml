@@ -9,7 +9,7 @@ data:
   # config on each slave node
   plugin_yaml_config: |
       # Path to Nuage kubeconfig
-      kubeConfig: /usr/share/vsp-k8s/nuage.kubeconfig
+      kubeConfig: /etc/kubernetes/pki/nuage.kubeconfig
       # Name of the enterprise in which pods will reside
       enterpriseName: kubernetes
       # Name of the domain in which pods will reside
@@ -21,11 +21,11 @@ data:
       # Bridge name for the docker bridge
       dockerBridgeName: docker0
       # Certificate for connecting to the kubemon REST API
-      nuageMonClientCert: /usr/share/vsp-k8s/nuageMonClient.crt
+      nuageMonClientCert: /var/lib/kubelet/pki/kubelet-client.crt
       # Key to the certificate in restClientCert
-      nuageMonClientKey: /usr/share/vsp-k8s/nuageMonClient.key
+      nuageMonClientKey: /var/lib/kubelet/pki/kubelet-client.key
       # CA certificate for verifying the master's rest server
-      nuageMonServerCA: /usr/share/vsp-k8s/nuageMonCA.crt
+      nuageMonServerCA: /etc/kubernetes/pki/ca.crt
       # Nuage vport mtu size
       interfaceMTU: 1460
       # Service CIDR
@@ -34,8 +34,7 @@ data:
       # allowed options are: "dbg", "info", "warn", "err", "emer", "off"
       logLevel: dbg
 
-  # This will generate the required Nuage network configuration
-  # on master nodes
+  # This will generate the required Nuage CNI yaml configuration
   cni_yaml_config: |
       vrsendpoint: "/var/run/openvswitch/db.sock"
       vrsbridge: "alubr0"
@@ -79,7 +78,7 @@ spec:
         # This container installs Nuage CNI binaries
         # and CNI network config file on each node.
         - name: install-nuage-cni
-          image: nuage/cni:v5.0.2
+          image: nuage/cni:v5.1.2
           command: ["/install-cni.sh"]
           args: ["nuage-cni-k8s"]
           securityContext:
@@ -104,7 +103,13 @@ spec:
                   key: cni_yaml_config
             # Nuage cluster network CIDR for iptables configuration
             - name: NUAGE_CLUSTER_NW_CIDR
-              value: "80.80.0.0/16"
+              value: "70.70.0.0/16"
+            # Kubernetes Master api-server URL
+            - name: MASTER_API_SERVER_URL
+              value: "https://<master-ip>:6443"
+            # nuage user service account token string
+            - name: NUAGE_TOKEN
+              value: "Add Kubernetes generated nuage service account token here"
           volumeMounts:
             - mountPath: /host/opt/cni/bin
               name: cni-bin-dir
@@ -118,6 +123,10 @@ spec:
               name: cni-log-dir
             - mountPath: /usr/share
               name: usr-share-dir
+            - mountPath: /etc/kubernetes/pki/
+              name: kubernetes-ca-dir
+            - mountPath: /var/lib/kubelet/pki/
+              name: kubernetes-cert-dir
       volumes:
         - name: cni-bin-dir
           hostPath:
@@ -137,6 +146,12 @@ spec:
         - name: usr-share-dir
           hostPath:
             path: /usr/share
+        - name: kubernetes-ca-dir
+          hostPath:
+            path: /etc/kubernetes/pki/
+        - name: kubernetes-cert-dir
+          hostPath:
+            path: /var/lib/kubelet/pki/
 
 ---
 
@@ -169,7 +184,7 @@ spec:
         # This container installs Nuage VRS running as a 
         # container on each worker node
         - name: install-nuage-vrs
-          image: nuage/vrs:v5.0.2
+          image: nuage/vrs:v5.1.2
           securityContext:
             privileged: true
           env:
